@@ -22,9 +22,6 @@ You are generating a comprehensive, multi-part testing plan for a Power Pages co
 by running 4 specialized research/planning agents **in parallel** and synthesizing their
 output into a single authoritative plan file.
 
-This is the same proven method used to produce the `assist-portal-testing-plan.md` —
-follow it exactly.
-
 ---
 
 ## Step 1 — Read Project Context
@@ -32,29 +29,36 @@ follow it exactly.
 Before doing anything else, gather project-specific facts. Read these files:
 
 1. `package.json` — project name, deploy script (to find the site URL), scripts
-2. `src/App.tsx` — all routes and auth guards (`RequireAuth` usage)
-3. `src/shared/powerPagesApi.ts` — entity prefix, fetch patterns, error codes
-4. All files in: `src/shared/services/`, `src/shared/hooks/`, `src/pages/`, `src/components/`
+2. `src/App.tsx` or `src/main.tsx` — all routes and auth guards (`RequireAuth` usage)
+3. `src/shared/powerPagesApi.ts` or equivalent API client — entity prefix, fetch patterns, error codes
+4. All files in: `src/shared/services/`, `src/services/`, `src/shared/hooks/`, `src/hooks/`, `src/pages/`, `src/components/`
 5. All files in: `.powerpages-site/table-permissions/` — scope, entity, web role info
 6. `src/styles/theme.css` or equivalent — design tokens
+7. `README.md` — may contain the site URL or deployment instructions
 
 Extract and note:
 - **Project name** (from `package.json` → `name` field)
-- **Site URL** (from deploy script in `package.json`, or README)
-- **Entity prefix** (e.g. `cr69c_`, `new_`, found in service files)
+- **Site URL** (from deploy script in `package.json`, README, or `.powerpages-site/` config)
+- **Entity prefix** (e.g. `cr69c_`, `new_`, found in service files or table permission YAMLs)
 - **Entity/table names** (from service files and table permission YAMLs)
-- **Routes** (from `App.tsx`)
-- **Auth-protected routes** (wrapped in `RequireAuth`)
+- **Routes** (from `App.tsx` or `main.tsx`)
+- **Auth-protected routes** (wrapped in `RequireAuth` or equivalent guard component)
 - **Stack** (React version, router, icon library — from `package.json`)
 - **Known issues** (look for comments like `// DEF-`, `// KNOWN ISSUE`, `// TODO`, `// WORKAROUND`)
 - **Table permission scopes** (from YAML files: Self, Authenticated, Global, Anonymous)
+- **Post-deploy scripts** (any scripts in `scripts/` folder or `package.json` mentioned in README)
+
+If the site URL cannot be determined from the codebase, ask the user before proceeding:
+> "What is the deployed URL of your Power Pages site?"
 
 ---
 
 ## Step 2 — Determine Output Path
 
 1. Slugify the project name: lowercase, replace spaces and special chars with `-`
-2. Output path: `C:\Users\XavierNGONGANGACHOUN\.claude\plans\{project-slug}-testing-plan.md`
+2. Output path: `~/.claude/plans/{project-slug}-testing-plan.md`
+   - On Windows this resolves to `%USERPROFILE%\.claude\plans\`
+   - On Mac/Linux this resolves to `~/.claude/plans/`
 3. Check if the file already exists with `Glob`
 4. If it exists: tell the user and ask "Regenerate? (yes/no)" before continuing
 5. If not: proceed to Step 3
@@ -67,7 +71,8 @@ Send a **single message** with all 4 `Agent` tool calls at once. All must have
 `run_in_background: true`. Do not launch them sequentially.
 
 Use the project context gathered in Step 1 to write specific, detailed prompts for each agent.
-The more project-specific the prompts, the better the output.
+Replace ALL placeholders with real values before launching — the more project-specific
+the prompts, the better the output.
 
 ### Agent 1 — Explore (subagent_type: "Explore")
 
@@ -76,9 +81,9 @@ Prompt template:
 You are researching how to test the {PROJECT_NAME} Power Pages portal.
 
 Read these project files:
-- src/shared/powerPagesApi.ts
-- src/shared/services/*.ts (all service files)
-- src/shared/hooks/*.ts (all hook files)
+- {API_CLIENT_FILE} (main API/fetch layer)
+- {SERVICE_FILES} (all service files)
+- {HOOK_FILES} (all hook files)
 - .powerpages-site/table-permissions/*.yml (all permission files)
 
 Produce a structured summary covering:
@@ -88,8 +93,9 @@ Produce a structured summary covering:
 4. Table permission scopes and what they allow (Self, Authenticated, Global, Anonymous)
 5. MSW mock patterns for unit testing (what endpoints need mocking, response shapes)
 6. Key things to verify in browser network logs (headers, response shape, $count usage)
-7. Auth states to test (anonymous, authenticated, admin/elevated role)
+7. Auth states to test (anonymous, authenticated, elevated role if present)
 8. Playwright testing patterns specific to Power Pages (token flow, OData response shape)
+9. Any post-deploy operational steps required (web role scripts, permission setup scripts)
 ```
 
 ### Agent 2 — UAT Plan (subagent_type: "Plan")
@@ -103,8 +109,10 @@ Project context:
 - Stack: {STACK}
 - Routes: {ROUTES} (auth-protected: {AUTH_ROUTES})
 - Tables: {ENTITY_NAMES}
+- Entity prefix: {ENTITY_PREFIX}
 - Known issues: {KNOWN_ISSUES}
 - Table permission scopes: {PERMISSION_SCOPES}
+- Post-deploy scripts: {POST_DEPLOY_SCRIPTS}
 
 Write test cases for every page/route. Each test case must include:
 - Test Case ID (TC-A-001, TC-B-001, etc. — module letter per page)
@@ -122,8 +130,9 @@ Also write:
   anti-forgery token 403 retry, session expiry 401 no-retry)
 - API Integration test cases (OData headers present, $count behavior, If-Match on PATCH,
   Location header ID extraction, exponential backoff)
-- Post-Deploy Regression Checklist (numbered steps to verify after every PAC CLI deploy)
-- Known Defects & Workarounds table
+- Post-Deploy Regression Checklist (numbered steps to verify after every PAC CLI deploy,
+  including any required post-deploy scripts)
+- Known Defects & Workarounds table (populate from the known issues provided)
 - UAT Sign-off Criteria (mandatory blocking vs non-blocking)
 
 Be specific about browser DevTools Network tab verification: exact URL patterns,
@@ -174,8 +183,8 @@ Include all of:
    - Responsive navbar breakpoint tests (hamburger toggle at exact breakpoint)
    - Network header verification (OData headers on all requests)
    - No horizontal overflow test (check scrollWidth > clientWidth)
-   - StatusConfirmDialog or equivalent modal flow
-   - File upload tests
+   - Modal/confirmation dialog flows (if present)
+   - File upload tests (if applicable)
    - Accessibility audit with @axe-core/playwright
 
 10. Known UX Issues: document anything found while reading the code
@@ -189,12 +198,14 @@ Write a full unit testing plan for the {PROJECT_NAME} Power Pages portal (React/
 
 Project context:
 - Stack: {STACK}
-- API layer: src/shared/powerPagesApi.ts
+- API layer: {API_CLIENT_FILE}
 - Services: {SERVICE_FILES}
 - Hooks: {HOOK_FILES}
 - Components: {COMPONENT_LIST}
+- Entity names: {ENTITY_NAMES}
+- Entity prefix: {ENTITY_PREFIX}
 
-The codebase has no existing tests. Recommend and plan for: Vitest + React Testing Library + MSW.
+Recommend and plan for: Vitest + React Testing Library + MSW.
 
 Include:
 
@@ -206,23 +217,18 @@ Include:
    - Test factory files (one per entity)
    - Important: explain the module-level token cache leak issue and mitigation
 
-2. Unit Tests: powerPagesApi.ts
+2. Unit Tests: API client ({API_CLIENT_FILE})
    - Token caching (fresh, cached hit, expiry) using vi.useFakeTimers()
    - 403 retry: CONCRETE test code showing token is invalidated + refreshed + different token used
    - 429/5xx exponential backoff: CONCRETE test with vi.advanceTimersByTimeAsync
    - 401 no-retry: CONCRETE test verifying callCount === 1
-   - fetchPage always adds $count=true
-   - escapeODataString edge cases (empty, multiple quotes)
-   - buildODataQuery skips undefined/empty
-   - extractRecordId from OData-EntityId and Location headers
-   - isPermissionError for all error codes + HTTP 403 catch-all
-   - fetchCurrentContactId fallback chain: CONCRETE tests for each of the 3 paths + exhaustion
+   - Any pagination helper (e.g. fetchPage adding $count=true) — verify behavior
+   - String escaping utilities, OData query builders, header extractors
 
 3. Unit Tests: Services
    - For EACH service file: list test cases covering CRUD operations
-   - CRITICAL: test that timeline service (if present) does NOT use $count=true
-     (look for a service that uses powerPagesFetch directly instead of fetchPage)
-   - Annotation/file service: formatBytes pure function, upload base64 flow
+   - Flag any service with a known workaround (avoid $count, avoid $expand, etc.) with CRITICAL tests
+   - File/annotation upload service if present: formatBytes pure function, base64 upload flow
 
 4. Unit Tests: Hooks
    - Each hook: loading state, success state, error state, permission error message
@@ -230,19 +236,19 @@ Include:
    - Revert-on-failure: CONCRETE test showing refetch() restores server state
 
 5. Unit Tests: Components
-   - renderWithProviders wrapper with MemoryRouter + LanguageProvider (if applicable)
+   - renderWithProviders wrapper with MemoryRouter and any context providers
    - Each component: aria attributes, keyboard behavior, variant rendering
 
 6. Integration Tests (full page + MSW)
    - Form submission flow: fill → submit → success state
    - Error flow: API failure → error banner shown
-   - Auth-gated page: unauthenticated → SignInPrompt rendered
+   - Auth-gated page: unauthenticated → sign-in prompt rendered
 
 7. Coverage Targets table (per module: lines %, rationale)
 
 8. CI Integration (GitHub Actions workflow YAML)
 
-9. Known Tricky Areas: module-level state leaks, jsdom quirks, authService localhost check,
+9. Known Tricky Areas: module-level state leaks, jsdom quirks, localhost checks in auth helpers,
    any component-specific gotchas found in the code
 ```
 
@@ -278,6 +284,14 @@ Use this exact structure:
 | ID | Status | Description |
 |---|---|---|
 | ... | ... | ... |
+
+---
+
+## Post-Deploy Checklist (Quick Reference)
+
+> Steps required after every PAC CLI deploy before testing
+
+1. ...
 
 ---
 
@@ -333,7 +347,8 @@ The more specific the agent prompts, the better the plan output:
 - Use actual entity names (not generic `entity_set`)
 - Use actual route paths (not `/page-1`, `/page-2`)
 - Use actual component names from the codebase
+- Use actual file paths for the API client and services
 - Include actual known issues from code comments
 
-If Step 1 couldn't determine the site URL (not in package.json or README), ask the user
+If Step 1 couldn't determine the site URL (not in package.json, README, or config), ask the user
 before proceeding: "What is the deployed URL of your Power Pages site?"

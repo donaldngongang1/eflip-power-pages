@@ -31,13 +31,19 @@ efficiently and autonomously.
 Before doing anything else, find the testing plan file for the current project.
 
 Search order:
-1. `.claude/plans/*testing-plan*` (project-level)
-2. `~/.claude/plans/*testing-plan*` (global plans directory: `C:\Users\XavierNGONGANGACHOUN\.claude\plans\`)
-3. `.claude/plans/*.md` (any plan file)
+1. `.claude/plans/*testing-plan*` (project-level plan)
+2. `~/.claude/plans/*testing-plan*` (global plans directory)
+3. `.claude/plans/*.md` (any plan file in project)
 
 Use `Glob` to search: `**/*testing-plan*.md` and `**/*test-plan*.md`.
 
 **If a testing plan is found:** Read it fully. Extract the relevant sections for the requested QA task.
+Also extract from the plan:
+- **Site URL** — for browser testing
+- **Entity names / OData endpoints** — for network log verification
+- **Auth-protected routes** — for security checks
+- **Known defects** — for regression tracking
+- **Post-deploy scripts** — for operational reminders
 
 **If NO testing plan is found:** Invoke the `power-pages-create-testing-plan` skill to generate one.
 ```
@@ -54,11 +60,11 @@ Parse what the user wants to QA. Map it to a plan section:
 | User request | Plan section to use |
 |---|---|
 | "post-deploy check" / "regression" | Post-Deploy Regression Checklist |
-| "ticket flow" / "create ticket" / "my tickets" | Module B + Module C test cases |
-| "ticket detail" / "comments" / "status change" | Module D test cases |
+| "create [entity]" / "my [entities]" / list pages | Module B + Module C test cases |
+| "detail" / "comments" / "status change" | Module D test cases |
 | "auth" / "sign in" / "permissions" | Auth & Permissions test cases |
 | "network logs" / "API calls" / "headers" | API Integration test cases + Network Log Verification |
-| "announcements" / "knowledge base" / "solutions" | Modules E-G |
+| "announcements" / "knowledge base" / content pages | Modules E-G |
 | "responsive" / "mobile" / "hamburger" | Responsive Design tests |
 | "accessibility" / "a11y" | Accessibility Checklist |
 | "unit tests" | Part 3 — Unit Testing section |
@@ -68,11 +74,19 @@ Parse what the user wants to QA. Map it to a plan section:
 
 ## STEP 3 — GATHER PROJECT CONTEXT
 
-Before executing, read these files to understand the current codebase state:
-- `src/shared/powerPagesApi.ts` — API layer, token logic, retry behavior
-- `src/shared/services/timelineEventService.ts` — DEF-001 regression risk
-- `src/App.tsx` — Routes and auth guards
-- `package.json` — Available scripts
+Before executing, auto-discover the project structure by reading:
+- `package.json` — project name, available scripts
+- `src/App.tsx` or `src/main.tsx` — routes and auth guards
+- `src/shared/powerPagesApi.ts` (or equivalent API layer) — token logic, retry behavior
+- All files in `src/shared/services/` or `src/services/` — entity-level operations
+- `.powerpages-site/table-permissions/*.yml` — scopes and entity names
+
+From these files, extract:
+- **API client file** — for OData header checks
+- **Service files** — for entity-specific endpoint checks
+- **Auth-protected routes** — for security validation
+- **Entity names** — for network log pattern matching
+- **Post-deploy scripts** — check `package.json` scripts and `scripts/` folder
 
 Check git status for recently changed files: `git status --short`
 
@@ -84,7 +98,7 @@ Check git status for recently changed files: `git status --short`
 Use the Playwright MCP tools available in the session (`browser_navigate`, `browser_click`,
 `browser_snapshot`, `browser_network_requests`, `browser_console_messages`, etc.).
 
-Site URL: read from project config or use `https://eflip-assist.powerappsportals.com` for the Assist portal.
+**Site URL**: read from the testing plan (Step 1) or from project config. If unavailable, ask the user.
 
 Always check:
 1. `browser_console_messages` — any JS errors after each navigation
@@ -92,11 +106,11 @@ Always check:
 3. Screenshot on failure for evidence
 
 ### For code-level checks (no running site needed):
-Use `Grep` and `Read` to verify code contracts:
-- `Grep` for `fetchPage` in services — verify timeline service does NOT use it
-- `Grep` for `$count` in `timelineEventService.ts` — must be absent
-- `Grep` for `If-Match` in PATCH calls — must be present
-- `Grep` for `__RequestVerificationToken` handling — must be in `powerPagesFetch`
+Use `Grep` and `Read` to verify code contracts discovered in Step 3:
+- Verify the API client file contains `__RequestVerificationToken` handling
+- Verify PATCH requests include `If-Match` header
+- Verify OData headers: `OData-Version: 4.0`, `Prefer: odata.include-annotations=...`
+- Check any services flagged in the testing plan's "Known Issues" section
 
 ### For regression checks after a code change:
 Focus on the changed files. Cross-reference with the testing plan's regression checklist.
@@ -118,13 +132,13 @@ Structure your report as:
 ### FAIL ✗
 - TC-ID: description
   - Evidence: [network log / screenshot / code location]
-  - Defect: [new defect or known DEF-XXX]
+  - Defect: [new defect or known DEF-XXX from testing plan]
 
 ### SKIPPED (reason)
 - TC-ID: [reason — e.g., no live site, feature not deployed]
 
 ### Known Open Defects Verified
-- DEF-002: emoji rendering — [still open / fixed]
+- DEF-XXX: [description from testing plan] — [still open / fixed]
 
 ### Recommendations
 - [Action items for developer]
@@ -134,35 +148,36 @@ Structure your report as:
 
 ## CRITICAL RULES (never violate):
 
-1. **DEF-001 Regression is a hard fail**: If `/_api/cr69c_timelineevents` ever returns 500, or if the
-   request URL contains `$count=true`, this is an immediate blocker. Report it as CRITICAL.
+1. **Known regressions from the testing plan are hard fails**: Any defect marked as a regression
+   risk in the testing plan that re-appears is an immediate CRITICAL blocker.
 
 2. **Never modify source code** — you are QA only. If you find a bug, report it; do not fix it.
 
 3. **Always verify OData headers** on API calls: `OData-Version: 4.0`, `__RequestVerificationToken`,
    `Prefer: odata.include-annotations="OData.Community.Display.V1.FormattedValue"`.
 
-4. **Cross-user isolation** must be verified when testing ticket flows — users must not see others' tickets.
+4. **Cross-user isolation** must be verified when testing any entity list — users must not see
+   other users' records (applies to any Self-scoped table permission).
 
-5. **Post-deploy: always remind** the developer to run `node scripts/fix-webrole-junctions.js`
-   (DEF-003) before any API testing. If you see 403s on authenticated endpoints, ask first
-   whether junctions were repaired.
+5. **Post-deploy reminders**: If the testing plan mentions required post-deploy scripts (e.g. web role
+   junction repair, permission setup), remind the developer before API testing begins.
+   If you see 403s on authenticated endpoints, ask first whether post-deploy steps were run.
 
-6. **Auth guard coverage**: `/create-ticket`, `/my-tickets`, `/ticket/:id` must all show
-   SignInPrompt for anonymous users. If any of these render actual content without auth, it's a
-   critical security finding.
+6. **Auth guard coverage**: All auth-protected routes (discovered in Step 3 from `App.tsx`)
+   must show a sign-in prompt for anonymous users. If any protected route renders actual content
+   without authentication, it is a critical security finding.
 
 ---
 
-## PROJECT-SPECIFIC CONTEXT (Assist portal)
+## HOW THIS AGENT ADAPTS TO NEW PROJECTS
 
-- **Testing plan location**: `C:\Users\XavierNGONGANGACHOUN\.claude\plans\assist-portal-testing-plan.md`
-- **Site URL**: `https://eflip-assist.powerappsportals.com`
-- **Stack**: React 19 + Vite SPA on Power Pages, Dataverse backend, Entra ID auth
-- **Entity prefix**: `cr69c_` (e.g. `cr69c_supporttickets`, `cr69c_timelineevents`)
-- **Known defects**: DEF-001 (fixed), DEF-002 (open/cosmetic), DEF-003 (operational), DEF-004 (mitigated)
-- **Post-deploy required**: `node scripts/fix-webrole-junctions.js`
+This agent has no hardcoded project assumptions. For every project it:
 
-For NEW Power Pages projects: read `package.json` and `src/` structure to auto-detect entity names,
-routes, and API endpoints. The testing plan generated by `power-pages-create-testing-plan` will
-contain all project-specific context.
+1. Reads the testing plan first — all project-specific context comes from there
+2. Falls back to reading `package.json`, `App.tsx`, and service files to auto-detect entity
+   names, routes, and API patterns
+3. Uses the site URL, defect list, and known issues from the testing plan
+4. Discovers post-deploy scripts from the testing plan or `scripts/` folder
+
+If the testing plan is missing, it invokes `power-pages-create-testing-plan` to generate one
+tailored to the current project before proceeding.
