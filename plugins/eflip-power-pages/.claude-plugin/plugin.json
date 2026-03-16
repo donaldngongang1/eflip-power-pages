@@ -3,9 +3,18 @@
   "version": "1.0.0",
   "description": "QA automation and testing plan generation for Power Pages portals. Includes the eflip-PowerPages-QA agent and the power-pages-create-testing-plan skill.",
   "author": {
-    "name": "eflip"
+    "name": "eflip",
+    "url": "https://github.com/donaldngongang1"
   },
-  "keywords": ["power-pages", "qa", "testing", "dataverse", "playwright"],
-  "agents": "./agents",
-  "skills": "./skills"
+  "homepage": "https://github.com/donaldngongang1/eflip-power-pages",
+  "repository": "https://github.com/donaldngongang1/eflip-power-pages",
+  "license": "MIT",
+  "keywords": [
+    "power-pages",
+    "qa",
+    "testing",
+    "dataverse",
+    "playwright",
+    "power-platform"
+  ]
 }
