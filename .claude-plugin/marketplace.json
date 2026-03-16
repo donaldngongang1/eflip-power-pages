@@ -1,0 +1,25 @@
+{
+  "name": "eflip-power-pages",
+  "owner": {
+    "name": "eflip"
+  },
+  "metadata": {
+    "description": "QA automation and testing plan generation for Power Pages portals"
+  },
+  "plugins": [
+    {
+      "name": "eflip-power-pages",
+      "source": "./plugins/eflip-power-pages",
+      "description": "QA automation and testing plan generation for Power Pages portals. Includes the eflip-PowerPages-QA agent and the power-pages-create-testing-plan skill.",
+      "category": "development",
+      "tags": [
+        "power pages",
+        "power platform",
+        "qa",
+        "testing",
+        "dataverse",
+        "playwright"
+      ]
+    }
+  ]
+}

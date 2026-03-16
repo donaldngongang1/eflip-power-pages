@@ -1,0 +1,11 @@
+{
+  "name": "eflip-power-pages",
+  "version": "1.0.0",
+  "description": "QA automation and testing plan generation for Power Pages portals. Includes the eflip-PowerPages-QA agent and the power-pages-create-testing-plan skill.",
+  "author": {
+    "name": "eflip"
+  },
+  "keywords": ["power-pages", "qa", "testing", "dataverse", "playwright"],
+  "agents": "./agents",
+  "skills": "./skills"
+}
